@@ -284,4 +284,7 @@ def action():
 
 
 if __name__ == '__main__':
+    import threading
+    import webbrowser
+    threading.Timer(1.0, lambda: webbrowser.open('http://localhost:5000')).start()
     app.run(debug=True, port=5000)
