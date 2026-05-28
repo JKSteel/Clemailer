@@ -1,0 +1,26 @@
+# OAuth credentials and tokens — never commit these
+credentials.json
+token_*.json
+.secret_key
+
+# Progress data
+progress_*.json
+
+# Downloads folder
+downloads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Flask
+instance/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

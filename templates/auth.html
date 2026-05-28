@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="centered-page">
+    <div class="auth-card">
+        <h1>Clemailer</h1>
+        <p>Find and clean up emails with large attachments from your Gmail account. Nothing is deleted without your explicit confirmation.</p>
+        <a href="{{ url_for('auth_start') }}" class="btn btn-primary btn-lg">Connect Gmail Account</a>
+        <p class="auth-note">You'll be redirected to Google to sign in. Your credentials stay on your machine.</p>
+    </div>
+</div>
+{% endblock %}

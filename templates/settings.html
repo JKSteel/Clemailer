@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="settings-page">
+    <div class="settings-card">
+        <h2>Settings</h2>
+
+        {% if summary.total %}
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ summary.total }}</div>
+                <div class="stat-label">Emails found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ summary.reviewed }}</div>
+                <div class="stat-label">Reviewed</div>
+            </div>
+            {% for action, count in summary.decision_counts.items() %}
+            <div class="stat-card">
+                <div class="stat-value">{{ count }}</div>
+                <div class="stat-label">{{ action | replace('_', ' ') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post">
+            <div class="form-group">
+                <label class="form-label" for="threshold_mb">Size threshold (MB)</label>
+                <input class="form-input form-input-short" type="number" id="threshold_mb"
+                       name="threshold_mb" value="{{ summary.threshold_mb }}" min="0.1" step="0.5">
+                <div class="form-hint">Only emails above this size will be shown. Changing this won't take effect until you re-fetch.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-check">
+                    <input type="checkbox" name="dry_run" {% if summary.dry_run %}checked{% endif %}>
+                    <span>Dry run mode</span>
+                </label>
+                <div class="form-hint">Deletions are logged but not executed. Downloads show the destination path without saving.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </form>
+
+        <hr class="divider">
+
+        <h3 class="section-title">Email list</h3>
+        {% if summary.fetched_at %}
+        <p class="text-muted mb-12">Last fetched: {{ summary.fetched_at[:19] | replace('T', ' ') }} UTC</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('fetch') }}">
+            <button type="submit" class="btn btn-ghost">Re-fetch emails</button>
+        </form>
+
+        <hr class="divider">
+
+        <h3 class="section-title">Reset progress</h3>
+        <p class="text-muted mb-12">Reset skipped items to re-review them, or start completely fresh.</p>
+        <div class="btn-row">
+            <form method="post" action="{{ url_for('reset') }}">
+                <input type="hidden" name="mode" value="skipped">
+                <button type="submit" class="btn btn-ghost">Re-queue skipped</button>
+            </form>
+            <form method="post" action="{{ url_for('reset') }}"
+                  onsubmit="return confirm('Reset everything? All progress will be lost.')">
+                <input type="hidden" name="mode" value="all">
+                <button type="submit" class="btn btn-danger btn-outline">Reset everything</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

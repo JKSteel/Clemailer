@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block content %}
+
+{% if state == 'no_list' %}
+<div class="centered-page">
+    <div class="state-card">
+        <h2>Ready to scan</h2>
+        <p>Clemailer will find all emails above the size threshold and queue them for review. This may take a moment.</p>
+        <form method="post" action="{{ url_for('fetch') }}" class="fetch-form">
+            <label>
+                Size threshold:
+                <input type="number" name="threshold_mb" value="{{ summary.threshold_mb }}" min="0.1" step="0.5">
+                MB
+            </label>
+            <button type="submit" class="btn btn-primary btn-lg">Fetch Emails</button>
+        </form>
+    </div>
+</div>
+
+{% elif state == 'empty' %}
+<div class="centered-page">
+    <div class="state-card">
+        <h2>Nothing found</h2>
+        <p>No emails above {{ summary.threshold_mb }} MB were found. Try lowering the threshold.</p>
+        <a href="{{ url_for('settings') }}" class="btn btn-primary">Change threshold</a>
+    </div>
+</div>
+
+{% elif state == 'error' %}
+<div class="centered-page">
+    <div class="state-card">
+        <h2>Something went wrong</h2>
+        <p class="error-text">{{ error }}</p>
+        <div class="btn-row" style="justify-content:center">
+            <a href="{{ url_for('triage') }}" class="btn btn-ghost">Retry</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-ghost">Re-authenticate</a>
+        </div>
+    </div>
+</div>
+
+{% elif state == 'card' %}
+
+{% if summary.dry_run %}
+<div class="dry-run-banner">DRY RUN — no changes will be made to your inbox</div>
+{% endif %}
+
+<!-- Navigation bar -->
+<div class="nav-bar">
+    <form method="post" action="{{ url_for('navigate') }}" style="display:inline">
+        <button class="btn btn-nav" name="direction" value="prev" {% if idx == 0 %}disabled{% endif %}>←</button>
+    </form>
+    <span class="progress-indicator">{{ idx + 1 }} / {{ total }}</span>
+    <form method="post" action="{{ url_for('navigate') }}" style="display:inline">
+        <button class="btn btn-nav" name="direction" value="next" {% if idx == total - 1 %}disabled{% endif %}>→</button>
+    </form>
+    <form method="post" action="{{ url_for('navigate') }}" id="jump-form" style="display:inline">
+        <input class="jump-input" type="number" name="jump_to" placeholder="Go to #"
+               min="1" max="{{ total }}" onchange="document.getElementById('jump-form').submit()">
+    </form>
+    <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" style="width: {{ ((idx + 1) / total * 100) | round(1) }}%"></div>
+    </div>
+    {% if decision %}
+    <span class="decision-pill decision-{{ decision }}">{{ decision | replace('_', ' ') }}</span>
+    {% endif %}
+</div>
+
+<!-- Main card -->
+<div class="card-grid">
+
+    <!-- Left: preview + attachment list -->
+    <div class="preview-panel">
+        {% set previewable = msg.attachments | selectattr('mime_type', 'match', '^(image/|application/pdf)') | list %}
+        <div class="preview-area" id="preview-area">
+            {% if previewable %}
+                {% set first = previewable[0] %}
+                {% if first.mime_type.startswith('image/') %}
+                <img class="preview-img" src="{{ url_for('preview', msg_id=msg.id, att_id=first.id, mime=first.mime_type) }}">
+                {% else %}
+                <embed class="preview-pdf"
+                       src="{{ url_for('preview', msg_id=msg.id, att_id=first.id, mime=first.mime_type) }}"
+                       type="application/pdf">
+                {% endif %}
+            {% else %}
+            <div class="preview-empty">No inline preview available</div>
+            {% endif %}
+        </div>
+
+        <div class="attachment-list">
+            {% for att in msg.attachments %}
+            {% set is_previewable = att.mime_type.startswith('image/') or att.mime_type == 'application/pdf' %}
+            <div class="attachment-item {% if is_previewable %}previewable{% endif %} {% if loop.first and is_previewable %}active{% endif %}"
+                 data-att-id="{{ att.id }}"
+                 data-mime="{{ att.mime_type }}"
+                 data-url="{{ url_for('preview', msg_id=msg.id, att_id=att.id, mime=att.mime_type) }}"
+                 onclick="switchPreview(this)">
+                <span class="att-icon">
+                    {%- if att.mime_type.startswith('image/') %}🖼
+                    {%- elif att.mime_type == 'application/pdf' %}📄
+                    {%- else %}📎{%- endif %}
+                </span>
+                <span class="att-name" title="{{ att.filename }}">{{ att.filename }}</span>
+                <span class="att-size">{{ att.size | filesize }}</span>
+                <button class="btn btn-icon" title="Download this attachment"
+                        onclick="event.stopPropagation(); downloadAtt({{ att.id | tojson }}, {{ att.filename | tojson }})">⬇</button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Right: email info -->
+    <div class="info-panel">
+        <h2 class="email-subject">{{ msg.subject }}</h2>
+
+        <div class="email-meta">
+            <div class="meta-row"><span class="meta-label">From</span><span>{{ msg.from }}</span></div>
+            <div class="meta-row"><span class="meta-label">To</span><span>{{ msg.to }}</span></div>
+            {% if msg.cc %}
+            <div class="meta-row"><span class="meta-label">CC</span><span>{{ msg.cc }}</span></div>
+            {% endif %}
+            <div class="meta-row"><span class="meta-label">Date</span><span>{{ msg.date }}</span></div>
+            <div class="meta-row"><span class="meta-label">Size</span><span>~{{ msg.size | filesize }}</span></div>
+        </div>
+
+        <div class="body-preview">{{ msg.body_text or msg.snippet or '(no body)' }}</div>
+    </div>
+</div>
+
+<!-- Actions bar -->
+<div class="actions-bar">
+    <button class="btn btn-primary" onclick="downloadAll()">⬇ Download All</button>
+    <div class="actions-divider"></div>
+    <button class="btn btn-danger" onclick="confirmDelete('message')">🗑 Delete Message</button>
+    <button class="btn btn-danger btn-outline" onclick="confirmDelete('thread')"
+            title="Deletes all {{ thread | length }} message{{ 's' if thread | length != 1 }} in this thread">
+        🗑 Delete Thread ({{ thread | length }})
+    </button>
+    <div class="actions-divider"></div>
+    <button class="btn btn-ghost" onclick="doSkip()">Skip →</button>
+</div>
+
+<!-- Thread context -->
+<details class="thread-section">
+    <summary>Thread — {{ thread | length }} message{{ 's' if thread | length != 1 }}</summary>
+    <div class="thread-list">
+        {% for tmsg in thread %}
+        <div class="thread-msg {% if tmsg.id == msg.id %}thread-msg-current{% endif %}">
+            <div class="thread-msg-header">
+                <span class="thread-from">{{ tmsg.from }}</span>
+                {% if tmsg.attachments %}
+                <span class="thread-atts">📎 {{ tmsg.attachments | length }}</span>
+                {% endif %}
+                <span class="thread-date">{{ tmsg.date }}</span>
+            </div>
+            <div class="thread-snippet">{{ tmsg.snippet }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</details>
+
+<script>
+const CARD = {
+    msg_id:     {{ msg.id | tojson }},
+    thread_id:  {{ msg.thread_id | tojson }},
+    sender:     {{ msg.from | tojson }},
+    date:       {{ msg.date | tojson }},
+    thread_count: {{ thread | length }},
+    attachments: {{ msg.attachments | tojson }},
+};
+</script>
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clemailer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <a href="{{ url_for('triage') }}" class="brand">Clemailer</a>
+        {% if session.email %}
+        <span class="user">{{ session.email }}</span>
+        <a href="{{ url_for('settings') }}" class="btn btn-ghost btn-sm">Settings</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a>
+        {% endif %}
+    </header>
+    {% block content %}{% endblock %}
+    <div id="toast-container"></div>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
