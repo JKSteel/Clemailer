@@ -9,7 +9,7 @@
         <form method="post" action="{{ url_for('fetch') }}" class="fetch-form">
             <label>
                 Size threshold:
-                <input type="number" name="threshold_mb" value="{{ summary.threshold_mb }}" min="0.1" step="0.5">
+                <input type="number" name="threshold_mb" value="{{ summary.threshold_mb }}" min="1" step="any">
                 MB
             </label>
             <button type="submit" class="btn btn-primary btn-lg">Fetch Emails</button>
@@ -53,9 +53,9 @@
     <form method="post" action="{{ url_for('navigate') }}" style="display:inline">
         <button class="btn btn-nav" name="direction" value="next" {% if idx == total - 1 %}disabled{% endif %}>→</button>
     </form>
-    <form method="post" action="{{ url_for('navigate') }}" id="jump-form" style="display:inline">
-        <input class="jump-input" type="number" name="jump_to" placeholder="Go to #"
-               min="1" max="{{ total }}" onchange="document.getElementById('jump-form').submit()">
+    <form method="post" action="{{ url_for('navigate') }}" id="jump-form" style="display:inline;display:flex;align-items:center;gap:4px;">
+        <input class="jump-input" type="number" name="jump_to" placeholder="Go to #" min="1" max="{{ total }}">
+        <button type="submit" class="btn btn-nav btn-sm">Go</button>
     </form>
     <div class="progress-bar-wrap">
         <div class="progress-bar-fill" style="width: {{ ((idx + 1) / total * 100) | round(1) }}%"></div>
@@ -70,7 +70,7 @@
 
     <!-- Left: preview + attachment list -->
     <div class="preview-panel">
-        {% set previewable = msg.attachments | selectattr('mime_type', 'match', '^(image/|application/pdf)') | list %}
+        {% set previewable = msg.attachments | selectattr('mime_type', 'previewable_mime') | list %}
         <div class="preview-area" id="preview-area">
             {% if previewable %}
                 {% set first = previewable[0] %}
@@ -102,7 +102,7 @@
                 <span class="att-name" title="{{ att.filename }}">{{ att.filename }}</span>
                 <span class="att-size">{{ att.size | filesize }}</span>
                 <button class="btn btn-icon" title="Download this attachment"
-                        onclick="event.stopPropagation(); downloadAtt({{ att.id | tojson }}, {{ att.filename | tojson }})">⬇</button>
+                        onclick="event.stopPropagation(); downloadSingle({{ loop.index0 }})">⬇</button>
             </div>
             {% endfor %}
         </div>
@@ -128,12 +128,20 @@
 
 <!-- Actions bar -->
 <div class="actions-bar">
-    <button class="btn btn-primary" onclick="downloadAll()">⬇ Download All</button>
+    <button class="btn btn-complete" onclick="downloadStripDelete()">✓ Download, Strip, &amp; Trash</button>
     <div class="actions-divider"></div>
-    <button class="btn btn-danger" onclick="confirmDelete('message')">🗑 Delete Message</button>
+    <button class="btn btn-primary" onclick="downloadAll()">⬇ Download All</button>
+    <button class="btn btn-primary btn-outline" onclick="downloadAllNext()">⬇ Download All &amp; Next</button>
+    <div class="actions-divider"></div>
+    <button class="btn btn-warning" onclick="confirmDetach(true)"
+            title="Creates a copy without attachments, keeps the original">✂ Strip Attachments</button>
+    <button class="btn btn-warning btn-outline" onclick="confirmDetach(false)"
+            title="Creates a copy without attachments, moves original to trash">✂ Strip &amp; Trash Original</button>
+    <div class="actions-divider"></div>
+    <button class="btn btn-danger" onclick="confirmDelete('message')">🗑 Trash Message</button>
     <button class="btn btn-danger btn-outline" onclick="confirmDelete('thread')"
-            title="Deletes all {{ thread | length }} message{{ 's' if thread | length != 1 }} in this thread">
-        🗑 Delete Thread ({{ thread | length }})
+            title="Trashes all {{ thread | length }} message{{ 's' if thread | length != 1 }} in this thread">
+        🗑 Trash Thread ({{ thread | length }})
     </button>
     <div class="actions-divider"></div>
     <button class="btn btn-ghost" onclick="doSkip()">Skip →</button>
@@ -160,12 +168,13 @@
 
 <script>
 const CARD = {
-    msg_id:     {{ msg.id | tojson }},
-    thread_id:  {{ msg.thread_id | tojson }},
-    sender:     {{ msg.from | tojson }},
-    date:       {{ msg.date | tojson }},
+    msg_id:       {{ msg.id | tojson }},
+    thread_id:    {{ msg.thread_id | tojson }},
+    sender:       {{ msg.from | tojson }},
+    date:         {{ msg.date | tojson }},
+    subject:      {{ msg.subject | tojson }},
     thread_count: {{ thread | length }},
-    attachments: {{ msg.attachments | tojson }},
+    attachments:  {{ msg.attachments | tojson }},
 };
 </script>
 

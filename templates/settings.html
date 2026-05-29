@@ -2,7 +2,10 @@
 {% block content %}
 <div class="settings-page">
     <div class="settings-card">
-        <h2>Settings</h2>
+        <div class="settings-header">
+            <h2>Settings</h2>
+            <a href="{{ url_for('triage') }}" class="btn btn-ghost">← Back to triage</a>
+        </div>
 
         {% if summary.total %}
         <div class="stats-grid">
@@ -27,8 +30,31 @@
             <div class="form-group">
                 <label class="form-label" for="threshold_mb">Size threshold (MB)</label>
                 <input class="form-input form-input-short" type="number" id="threshold_mb"
-                       name="threshold_mb" value="{{ summary.threshold_mb }}" min="0.1" step="0.5">
+                       name="threshold_mb" value="{{ summary.threshold_mb }}" min="1" step="any">
                 <div class="form-hint">Only emails above this size will be shown. Changing this won't take effect until you re-fetch.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="download_sort">Download folder structure</label>
+                <select class="form-input" id="download_sort" name="download_sort" style="width:auto">
+                    <option value="sender_date"     {% if summary.download_sort == 'sender_date'     %}selected{% endif %}>Sender → Date</option>
+                    <option value="year_sender"     {% if summary.download_sort == 'year_sender'     %}selected{% endif %}>Year → Sender</option>
+                    <option value="sender"          {% if summary.download_sort == 'sender'          %}selected{% endif %}>Sender only</option>
+                    <option value="year_month_sender" {% if summary.download_sort == 'year_month_sender' %}selected{% endif %}>Year → Month → Sender</option>
+                    <option value="type_sender"     {% if summary.download_sort == 'type_sender'     %}selected{% endif %}>File type → Sender</option>
+                    <option value="sender_subject"  {% if summary.download_sort == 'sender_subject'  %}selected{% endif %}>Sender → Subject</option>
+                </select>
+                <div class="form-hint">How attachments are organised inside the download folder.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="download_path">Download folder</label>
+                <div class="input-with-btn">
+                    <input class="form-input" type="text" id="download_path"
+                           name="download_path" value="{{ summary.download_path }}">
+                    <button type="button" class="btn btn-ghost" onclick="browseFolder()">Browse…</button>
+                </div>
+                <div class="form-hint">Where to save downloaded attachments. Absolute (e.g. C:\Users\jamie\Downloads\Clemailer) or relative (e.g. downloads).</div>
             </div>
 
             <div class="form-group">
@@ -41,6 +67,12 @@
 
             <button type="submit" class="btn btn-primary">Save Settings</button>
         </form>
+
+        <hr class="divider">
+
+        <h3 class="section-title">Confirmation dialogs</h3>
+        <p class="text-muted mb-12">Reset all "Don't ask again" dismissals.</p>
+        <button type="button" class="btn btn-ghost" onclick="resetConfirmations()">Reset confirmations</button>
 
         <hr class="divider">
 

@@ -36,6 +36,11 @@ def filesize_filter(n):
     return f'{n:.1f} TB'
 
 
+@app.template_test('previewable_mime')
+def previewable_mime_test(mime_type):
+    return mime_type.startswith('image/') or mime_type == 'application/pdf'
+
+
 def _token_path(email):
     safe = re.sub(r'[^\w]', '_', email)
     return Path(f'token_{safe}.json')
@@ -92,8 +97,11 @@ def auth_start():
         CREDENTIALS_FILE, scopes=SCOPES,
         redirect_uri=url_for('oauth_callback', _external=True)
     )
-    auth_url, state = flow.authorization_url(access_type='offline', prompt='consent')
+    auth_url, state = flow.authorization_url(
+        access_type='offline', prompt='consent', code_challenge_method='S256'
+    )
     session['oauth_state'] = state
+    session['code_verifier'] = flow.code_verifier
     return redirect(auth_url)
 
 
@@ -107,7 +115,8 @@ def oauth_callback():
         state=session.get('oauth_state'),
         redirect_uri=url_for('oauth_callback', _external=True)
     )
-    flow.fetch_token(authorization_response=request.url)
+    flow.fetch_token(authorization_response=request.url,
+                     code_verifier=session.get('code_verifier'))
     creds = flow.credentials
 
     from googleapiclient.discovery import build
@@ -210,7 +219,12 @@ def settings():
             threshold = float(threshold)
         except ValueError:
             threshold = 5.0
-        p.update_settings(threshold_mb=threshold, dry_run='dry_run' in request.form)
+        p.update_settings(
+            threshold_mb=threshold,
+            dry_run='dry_run' in request.form,
+            download_path=request.form.get('download_path', 'downloads'),
+            download_sort=request.form.get('download_sort', 'sender_date'),
+        )
         return redirect(url_for('settings'))
     return render_template('settings.html', summary=p.get_summary())
 
@@ -254,10 +268,15 @@ def action():
                     msg_id, att['id'], att['filename'],
                     data.get('sender', ''), data.get('date', ''),
                     dry_run=dry_run,
+                    base_path=p.download_path,
+                    sort_by=p.download_sort,
+                    mime_type=att.get('mime_type', ''),
+                    subject=data.get('subject', ''),
                 )
                 paths.append(path)
             p.record_decision(msg_id, 'downloaded')
-            p.advance()
+            if data.get('advance', False):
+                p.advance()
             return jsonify(ok=True, paths=paths, dry_run=dry_run)
 
         elif action_type == 'delete_message':
@@ -272,6 +291,13 @@ def action():
             p.advance()
             return jsonify(ok=True, **result)
 
+        elif action_type == 'detach':
+            keep_original = data.get('keep_original', False)
+            result = c.detach_attachments(msg_id, dry_run=dry_run, keep_original=keep_original)
+            p.record_decision(msg_id, 'detached')
+            p.advance()
+            return jsonify(ok=True, **result)
+
         elif action_type == 'skip':
             p.record_decision(msg_id, 'skipped')
             p.advance()
@@ -283,8 +309,25 @@ def action():
         return jsonify(ok=False, error=str(e)), 500
 
 
+@app.route('/browse-folder')
+@require_auth
+def browse_folder():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes('-topmost', 1)
+        folder = filedialog.askdirectory(title='Select download folder')
+        root.destroy()
+        return jsonify(path=folder.replace('/', '\\') if folder else '')
+    except Exception as e:
+        return jsonify(path='', error=str(e))
+
+
 if __name__ == '__main__':
     import threading
     import webbrowser
-    threading.Timer(1.0, lambda: webbrowser.open('http://localhost:5000')).start()
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        threading.Timer(1.0, lambda: webbrowser.open('http://localhost:5000')).start()
     app.run(debug=True, port=5000)

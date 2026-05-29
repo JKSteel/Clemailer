@@ -17,6 +17,8 @@ class ProgressManager:
             'email': self.email,
             'threshold_mb': 5.0,
             'dry_run': False,
+            'download_path': 'downloads',
+            'download_sort': 'sender_date',
             'message_ids': None,
             'current_index': 0,
             'decisions': {},
@@ -35,6 +37,14 @@ class ProgressManager:
         return bool(self._data.get('dry_run', False))
 
     @property
+    def download_path(self):
+        return self._data.get('download_path', 'downloads')
+
+    @property
+    def download_sort(self):
+        return self._data.get('download_sort', 'sender_date')
+
+    @property
     def current_index(self):
         return int(self._data.get('current_index', 0))
 
@@ -51,11 +61,15 @@ class ProgressManager:
         self._data['fetched_at'] = datetime.now(timezone.utc).isoformat()
         self._save()
 
-    def update_settings(self, threshold_mb=None, dry_run=None):
+    def update_settings(self, threshold_mb=None, dry_run=None, download_path=None, download_sort=None):
         if threshold_mb is not None:
             self._data['threshold_mb'] = float(threshold_mb)
         if dry_run is not None:
             self._data['dry_run'] = bool(dry_run)
+        if download_path is not None:
+            self._data['download_path'] = download_path.strip() or 'downloads'
+        if download_sort is not None:
+            self._data['download_sort'] = download_sort
         self._save()
 
     def record_decision(self, msg_id, decision):
@@ -90,6 +104,8 @@ class ProgressManager:
             'fetched_at': self._data.get('fetched_at'),
             'dry_run': self.dry_run,
             'threshold_mb': self.threshold_mb,
+            'download_path': self.download_path,
+            'download_sort': self.download_sort,
             'decision_counts': _count_decisions(decisions),
         }
 
