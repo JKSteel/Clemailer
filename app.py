@@ -202,7 +202,7 @@ def fetch():
             pass
 
     c = get_client()
-    ids = c.list_large_messages(int(p.threshold_mb * 1024 * 1024))
+    ids = c.list_large_messages(int(p.threshold_mb * 1024 * 1024), label_id=p.label_id or None)
     p.set_message_ids(ids)
     return redirect(url_for('triage'))
 
@@ -224,9 +224,25 @@ def settings():
             dry_run='dry_run' in request.form,
             download_path=request.form.get('download_path', 'downloads'),
             download_sort=request.form.get('download_sort', 'sender_date'),
+            label_id=request.form.get('label_id', ''),
+            label_name=request.form.get('label_name', 'All Mail'),
         )
         return redirect(url_for('settings'))
-    return render_template('settings.html', summary=p.get_summary())
+    try:
+        labels = get_client().list_labels()
+    except Exception:
+        labels = [{'id': '', 'name': 'All Mail'}]
+    return render_template('settings.html', summary=p.get_summary(), labels=labels)
+
+
+@app.route('/next-undecided', methods=['POST'])
+@require_auth
+def next_undecided():
+    p = get_progress()
+    idx = p.next_undecided()
+    if idx is not None:
+        p.set_index(idx)
+    return redirect(url_for('triage'))
 
 
 @app.route('/reset', methods=['POST'])
@@ -307,6 +323,55 @@ def action():
 
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 500
+
+
+@app.route('/batch/step', methods=['POST'])
+@require_auth
+def batch_step():
+    data = request.get_json()
+    idx = data.get('idx', 0)
+    p = get_progress()
+    ids = p.message_ids
+
+    if idx >= len(ids):
+        return jsonify(done=True)
+
+    msg_id = ids[idx]
+
+    if p.get_decision(msg_id):
+        return jsonify(skipped=True)
+
+    c = get_client()
+    dry_run = p.dry_run
+
+    try:
+        msg = c.get_message_summary(msg_id)
+        paths = []
+        for att in msg.get('attachments', []):
+            path = c.download_attachment(
+                msg_id, att['id'], att['filename'],
+                msg.get('from', ''), msg.get('date', ''),
+                dry_run=dry_run,
+                base_path=p.download_path,
+                sort_by=p.download_sort,
+                mime_type=att.get('mime_type', ''),
+                subject=msg.get('subject', ''),
+            )
+            paths.append(path)
+
+        strip_result = c.detach_attachments(msg_id, dry_run=dry_run, keep_original=False)
+        p.record_decision(msg_id, 'batch_processed')
+
+        return jsonify(
+            ok=True,
+            subject=msg.get('subject', '(no subject)'),
+            sender=msg.get('from', ''),
+            paths=paths,
+            stripped=strip_result.get('removed', 0),
+            dry_run=dry_run,
+        )
+    except Exception as e:
+        return jsonify(ok=False, error=str(e), subject='unknown')
 
 
 @app.route('/browse-folder')

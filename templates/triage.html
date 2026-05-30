@@ -57,6 +57,9 @@
         <input class="jump-input" type="number" name="jump_to" placeholder="Go to #" min="1" max="{{ total }}">
         <button type="submit" class="btn btn-nav btn-sm">Go</button>
     </form>
+    <form method="post" action="{{ url_for('next_undecided') }}" style="display:inline">
+        <button type="submit" class="btn btn-nav btn-sm">Next undecided</button>
+    </form>
     <div class="progress-bar-wrap">
         <div class="progress-bar-fill" style="width: {{ ((idx + 1) / total * 100) | round(1) }}%"></div>
     </div>
@@ -128,6 +131,7 @@
 
 <!-- Actions bar -->
 <div class="actions-bar">
+    <button class="btn btn-run-all" onclick="startBatch()" title="Process all remaining emails: download, strip, & trash each one">▶ Run All</button>
     <button class="btn btn-complete" onclick="downloadStripDelete()">✓ Download, Strip, &amp; Trash</button>
     <div class="actions-divider"></div>
     <button class="btn btn-primary" onclick="downloadAll()">⬇ Download All</button>
@@ -145,6 +149,9 @@
     </button>
     <div class="actions-divider"></div>
     <button class="btn btn-ghost" onclick="doSkip()">Skip →</button>
+    {# TODO: Skip Thread — mark all messages in this thread as skipped regardless of their
+       position in the queue. Need to confirm whether duplicates are within a single message
+       or spread across thread messages first (see duplicate inline images discussion). #}
 </div>
 
 <!-- Thread context -->
@@ -175,6 +182,8 @@ const CARD = {
     subject:      {{ msg.subject | tojson }},
     thread_count: {{ thread | length }},
     attachments:  {{ msg.attachments | tojson }},
+    idx:          {{ idx }},
+    total:        {{ total }},
 };
 </script>
 

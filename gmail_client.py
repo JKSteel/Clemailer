@@ -9,13 +9,37 @@ class GmailClient:
     def __init__(self, credentials):
         self.service = build('gmail', 'v1', credentials=credentials)
 
-    def list_large_messages(self, min_size_bytes):
+    def list_labels(self):
+        result = self.service.users().labels().list(userId='me').execute()
+        all_labels = result.get('labels', [])
+
+        system_order = {'INBOX': 'Inbox', 'SENT': 'Sent', 'DRAFT': 'Drafts',
+                        'SPAM': 'Spam', 'TRASH': 'Trash'}
+        system_skip  = {'UNREAD', 'STARRED', 'IMPORTANT', 'CHAT',
+                        'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS',
+                        'CATEGORY_UPDATES', 'CATEGORY_FORUMS'}
+
+        labels = [{'id': '', 'name': 'All Mail'}]
+        for sys_id, sys_name in system_order.items():
+            if any(l['id'] == sys_id for l in all_labels):
+                labels.append({'id': sys_id, 'name': sys_name})
+
+        user_labels = sorted(
+            [l for l in all_labels if l.get('type') == 'user' and l['id'] not in system_skip],
+            key=lambda l: l['name'].lower(),
+        )
+        labels.extend({'id': l['id'], 'name': l['name']} for l in user_labels)
+        return labels
+
+    def list_large_messages(self, min_size_bytes, label_id=None):
         min_mb = max(1, int(min_size_bytes / (1024 * 1024)))
         query = f'larger:{min_mb}m has:attachment'
         messages = []
         page_token = None
         while True:
             kwargs = {'userId': 'me', 'q': query, 'maxResults': 500}
+            if label_id:
+                kwargs['labelIds'] = [label_id]
             if page_token:
                 kwargs['pageToken'] = page_token
             result = self.service.users().messages().list(**kwargs).execute()

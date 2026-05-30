@@ -27,6 +27,19 @@
         {% endif %}
 
         <form method="post">
+            <input type="hidden" id="label_name_hidden" name="label_name" value="{{ summary.label_name }}">
+
+            <div class="form-group">
+                <label class="form-label" for="label_id">Label / folder to scan</label>
+                <select class="form-input" id="label_id" name="label_id" style="width:auto"
+                        onchange="document.getElementById('label_name_hidden').value = this.options[this.selectedIndex].text">
+                    {% for lbl in labels %}
+                    <option value="{{ lbl.id }}" {% if lbl.id == summary.label_id %}selected{% endif %}>{{ lbl.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-hint">Only emails in this label will be scanned. Changing this won't take effect until you re-fetch.</div>
+            </div>
+
             <div class="form-group">
                 <label class="form-label" for="threshold_mb">Size threshold (MB)</label>
                 <input class="form-input form-input-short" type="number" id="threshold_mb"

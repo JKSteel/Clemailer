@@ -19,6 +19,8 @@ class ProgressManager:
             'dry_run': False,
             'download_path': 'downloads',
             'download_sort': 'sender_date',
+            'label_id':   '',
+            'label_name': 'All Mail',
             'message_ids': None,
             'current_index': 0,
             'decisions': {},
@@ -45,6 +47,14 @@ class ProgressManager:
         return self._data.get('download_sort', 'sender_date')
 
     @property
+    def label_id(self):
+        return self._data.get('label_id', '')
+
+    @property
+    def label_name(self):
+        return self._data.get('label_name', 'All Mail')
+
+    @property
     def current_index(self):
         return int(self._data.get('current_index', 0))
 
@@ -61,7 +71,8 @@ class ProgressManager:
         self._data['fetched_at'] = datetime.now(timezone.utc).isoformat()
         self._save()
 
-    def update_settings(self, threshold_mb=None, dry_run=None, download_path=None, download_sort=None):
+    def update_settings(self, threshold_mb=None, dry_run=None, download_path=None,
+                        download_sort=None, label_id=None, label_name=None):
         if threshold_mb is not None:
             self._data['threshold_mb'] = float(threshold_mb)
         if dry_run is not None:
@@ -70,6 +81,10 @@ class ProgressManager:
             self._data['download_path'] = download_path.strip() or 'downloads'
         if download_sort is not None:
             self._data['download_sort'] = download_sort
+        if label_id is not None:
+            self._data['label_id']   = label_id
+        if label_name is not None:
+            self._data['label_name'] = label_name
         self._save()
 
     def record_decision(self, msg_id, decision):
@@ -94,6 +109,14 @@ class ProgressManager:
     def retreat(self):
         self.set_index(self.current_index - 1)
 
+    def next_undecided(self):
+        decisions = self._data.get('decisions', {})
+        ids = self.message_ids
+        for i, msg_id in enumerate(ids):
+            if msg_id not in decisions:
+                return i
+        return None
+
     def get_summary(self):
         decisions = self._data.get('decisions', {})
         return {
@@ -106,6 +129,8 @@ class ProgressManager:
             'threshold_mb': self.threshold_mb,
             'download_path': self.download_path,
             'download_sort': self.download_sort,
+            'label_id': self.label_id,
+            'label_name': self.label_name,
             'decision_counts': _count_decisions(decisions),
         }
 

@@ -209,6 +209,166 @@ async function doSkip() {
     else { clearProgress(); showToast('Error: ' + result.error, 'error'); }
 }
 
+// ── Batch processing ──────────────────────────────────────────────────────────
+
+let _batchState = null; // 'running' | 'paused' | 'stopped' | null
+
+async function startBatch() {
+    const remaining = CARD.total - CARD.idx;
+    if (!await modal('batch_run', `Process all ${remaining} remaining email${remaining === 1 ? '' : 's'} from this point?\n\nEach will be downloaded, stripped, and moved to trash. Errors are skipped and left in your queue for manual review.`)) return;
+
+    _batchState = 'running';
+    _showBatchOverlay();
+
+    const errors = [];
+    let processed = 0;
+    const startIdx = CARD.idx;
+    const total    = CARD.total;
+
+    for (let i = startIdx; i < total; i++) {
+        if (_batchState === 'stopped') break;
+        while (_batchState === 'paused') await new Promise(r => setTimeout(r, 300));
+        if (_batchState === 'stopped') break;
+
+        _updateBatchOverlay(i - startIdx, total - startIdx, 'Fetching…', '');
+
+        let result;
+        try {
+            const res = await fetch('/batch/step', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idx: i }),
+            });
+            result = await res.json();
+        } catch (e) {
+            errors.push({ idx: i + 1, subject: `Email ${i + 1}`, error: 'Network error' });
+            continue;
+        }
+
+        if (result.done) break;
+        if (result.skipped) continue;
+
+        if (result.ok) {
+            processed++;
+            const label = result.dry_run ? '[Dry run] ' : '';
+            _updateBatchOverlay(
+                i - startIdx + 1, total - startIdx,
+                result.subject,
+                `${label}Downloaded ${result.paths.length} file${result.paths.length === 1 ? '' : 's'}, stripped & trashed`,
+            );
+        } else {
+            errors.push({ idx: i + 1, subject: result.subject || `Email ${i + 1}`, error: result.error });
+            _updateBatchOverlay(i - startIdx + 1, total - startIdx, result.subject || `Email ${i + 1}`, `Error — skipped`);
+        }
+
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    _batchState = 'done';
+    _showBatchSummary(processed, errors, total - startIdx);
+}
+
+function toggleBatchPause() {
+    if (_batchState === 'paused') {
+        _batchState = 'running';
+        document.getElementById('batch-pause-btn').textContent = 'Pause';
+        document.getElementById('batch-title').textContent = 'Processing emails…';
+    } else if (_batchState === 'running') {
+        _batchState = 'paused';
+        document.getElementById('batch-pause-btn').textContent = 'Resume';
+        document.getElementById('batch-title').textContent = 'Paused';
+    }
+}
+
+function stopBatch() {
+    _batchState = 'stopped';
+}
+
+function closeBatch() {
+    document.getElementById('batch-overlay')?.remove();
+    _batchState = null;
+    location.reload();
+}
+
+function _showBatchOverlay() {
+    const el = document.createElement('div');
+    el.id = 'batch-overlay';
+    el.className = 'batch-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'batch-modal';
+    modal.innerHTML = `
+        <div class="batch-header">
+            <span id="batch-title">Processing emails…</span>
+            <span id="batch-count" class="batch-count"></span>
+        </div>
+        <div class="batch-bar-wrap"><div id="batch-bar" class="batch-bar-fill" style="width:0%"></div></div>
+        <div id="batch-subject" class="batch-subject">Starting…</div>
+        <div id="batch-action"  class="batch-action"></div>
+        <div id="batch-errors-section" style="display:none">
+            <p id="batch-errors-title" class="batch-errors-title"></p>
+            <ul id="batch-errors-list" class="batch-errors-list"></ul>
+        </div>
+        <div class="batch-controls">
+            <button id="batch-pause-btn" class="btn btn-ghost"           onclick="toggleBatchPause()">Pause</button>
+            <button id="batch-stop-btn"  class="btn btn-danger btn-outline" onclick="stopBatch()">Stop</button>
+            <button id="batch-done-btn"  class="btn btn-primary"         onclick="closeBatch()" style="display:none">Done</button>
+        </div>`;
+
+    el.appendChild(modal);
+    document.body.appendChild(el);
+}
+
+function _updateBatchOverlay(done, total, subject, action) {
+    const pct = total > 0 ? Math.round(done / total * 100) : 0;
+    const bar  = document.getElementById('batch-bar');
+    const cnt  = document.getElementById('batch-count');
+    const sub  = document.getElementById('batch-subject');
+    const act  = document.getElementById('batch-action');
+    if (bar) bar.style.width = pct + '%';
+    if (cnt) cnt.textContent = `${done} / ${total}`;
+    if (sub) sub.textContent = subject || '';
+    if (act) act.textContent = action  || '';
+}
+
+function _showBatchSummary(processed, errors, total) {
+    const title = document.getElementById('batch-title');
+    const sub   = document.getElementById('batch-subject');
+    const act   = document.getElementById('batch-action');
+    const pause = document.getElementById('batch-pause-btn');
+    const stop  = document.getElementById('batch-stop-btn');
+    const done  = document.getElementById('batch-done-btn');
+    const bar   = document.getElementById('batch-bar');
+    const cnt   = document.getElementById('batch-count');
+
+    if (title) title.textContent = _batchState === 'stopped' ? 'Stopped' : 'Done';
+    if (bar)   bar.style.width = '100%';
+    if (cnt)   cnt.textContent = `${processed} processed`;
+    if (sub)   sub.textContent = `${processed} email${processed === 1 ? '' : 's'} successfully processed.`;
+    if (act)   act.textContent = '';
+    if (pause) pause.style.display = 'none';
+    if (stop)  stop.style.display  = 'none';
+    if (done)  done.style.display  = '';
+
+    if (errors.length > 0) {
+        const section = document.getElementById('batch-errors-section');
+        const errTitle = document.getElementById('batch-errors-title');
+        const errList  = document.getElementById('batch-errors-list');
+        if (section) section.style.display = '';
+        if (errTitle) errTitle.textContent = `${errors.length} email${errors.length === 1 ? '' : 's'} failed and remain in your queue:`;
+        if (errList) {
+            errors.forEach(e => {
+                const li = document.createElement('li');
+                li.className = 'batch-error-item';
+                const subj = document.createElement('span'); subj.className = 'batch-error-subject'; subj.textContent = e.subject;
+                const err  = document.createElement('span'); err.className  = 'batch-error-msg';     err.textContent  = e.error;
+                li.append(subj, ' — ', err);
+                errList.appendChild(li);
+            });
+        }
+    }
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 async function browseFolder() {
