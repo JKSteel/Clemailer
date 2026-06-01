@@ -30,7 +30,7 @@ You need to create a Google Cloud project and enable the Gmail API. It takes abo
    - Click **Download JSON** on the confirmation dialog (or the download icon next to your new client in the list).
 7. Rename the downloaded file to `credentials.json` and place it in the same folder as this README.
 
-> Your credentials.json stays on your machine and is never uploaded anywhere. It's in .gitignore so it won't be accidentally committed.
+> Your credentials.json stays on your machine and is never uploaded anywhere
 
 ---
 
