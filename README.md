@@ -6,14 +6,14 @@ A local web app for triaging large Gmail emails — review, download attachments
 
 ## What you need
 
-- **Python 3.10+** — download from [python.org](https://www.python.org/downloads/). Tick "Add Python to PATH" during installation.
+- **Python 3.10+**
 - **A `credentials.json` file** from Google — see below.
 
 ---
 
 ## Getting your credentials.json
 
-You need to create a Google Cloud project and enable the Gmail API. It takes about 5 minutes.
+You need to create a Google Cloud project and enable the Gmail API.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and sign in.
 2. Click the project dropdown at the top → **New Project** → give it any name → **Create**.
@@ -38,9 +38,9 @@ You need to create a Google Cloud project and enable the Gmail API. It takes abo
 
 Double-click **`run.bat`**.
 
-- The first run installs dependencies into a local `.venv` folder (takes ~30 seconds).
+- The first run installs dependencies into a local `.venv` folder.
 - Your browser will open automatically at `http://localhost:5000`.
-- Sign in with your Google account when prompted. Google will warn that the app is unverified — click **Advanced → Go to [app name]** to proceed. This is normal for personal OAuth apps.
+- Sign in with your Google account when prompted. Google will warn that the app is unverified — click **Advanced → Go to [app name]** to proceed.
 
 After signing in, a `token_*.json` file is saved locally so you stay logged in between sessions.
 
@@ -70,10 +70,6 @@ After signing in, a `token_*.json` file is saved locally so you stay logged in b
 ---
 
 ## Troubleshooting
-
-**"Python not found"** — make sure Python is installed and "Add to PATH" was ticked. Try running `python --version` in a terminal to check.
-
-**Google sign-in shows a warning** — this is expected for personal OAuth apps in test mode. Click Advanced → proceed.
 
 **"Access blocked: App has not completed verification"** — go back to the OAuth consent screen in Google Cloud Console, make sure your Gmail is listed under Test Users, and try again.
 
